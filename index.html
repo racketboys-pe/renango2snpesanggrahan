@@ -1,0 +1,1255 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Hasil Pertandingan Renang</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            blue: '#0033A0',
+                            dark: '#001A57',
+                            cyan: 'rgb(var(--color-primary))'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        :root { --color-primary: 0, 229, 255; --bg-wallpaper: url(''); }
+        body {
+            background-color: #001A57;
+            background-image: var(--bg-wallpaper);
+            background-size: cover;
+            background-attachment: fixed;
+            background-position: center;
+        }
+        .glass {
+            background: rgba(0, 26, 87, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .glass-dark {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type="number"] { -moz-appearance: textfield; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgb(var(--color-primary)); border-radius: 4px; }
+        
+        /* Animasi Running Text */
+        .marquee-container {
+            overflow: hidden;
+            white-space: nowrap;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .marquee-content {
+            display: inline-block;
+            padding-left: 100%;
+            animation: marquee 25s linear infinite;
+        }
+        @keyframes marquee {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(-100%, 0); }
+        }
+    </style>
+</head>
+<body class="min-h-screen text-white font-sans antialiased relative">
+
+    <div class="absolute inset-0 bg-gradient-to-br from-brand-dark/80 via-brand-blue/60 to-black/90 pointer-events-none z-[-1]"></div>
+
+    <!-- Navbar -->
+    <nav class="glass sticky top-0 z-50 px-6 py-4 flex justify-between items-center shadow-lg">
+        <div class="flex items-center space-x-3 cursor-pointer" onclick="UI.navigate('dashboard')">
+            <img id="nav-logo" src="" alt="Logo" class="hidden h-10 w-auto object-contain rounded">
+            <i id="nav-icon" class="fa-solid fa-water text-brand-cyan text-2xl"></i>
+            <h1 id="nav-title" class="text-xl md:text-2xl font-bold tracking-wider uppercase bg-clip-text text-transparent bg-gradient-to-r from-white to-brand-cyan drop-shadow-md">
+                AquaRace Hub
+            </h1>
+        </div>
+        <div>
+            <button onclick="UI.navigate('dashboard')" class="hover:text-brand-cyan transition px-3"><i class="fa-solid fa-home"></i> Publik</button>
+            <button onclick="UI.navigate('login')" class="bg-brand-cyan text-black px-4 py-2 rounded-full font-bold shadow-[0_0_15px_rgba(var(--color-primary),0.5)] hover:scale-105 transition ml-2">
+                <i class="fa-solid fa-user-shield"></i> Admin
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <main class="container mx-auto p-4 md:p-8 relative min-h-[85vh] flex flex-col">
+
+        <!-- LOADER -->
+        <div id="loader" class="hidden absolute inset-0 z-40 flex justify-center items-center h-64">
+            <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-brand-cyan"></div>
+        </div>
+
+        <!-- VIEW: PUBLIC DASHBOARD -->
+        <section id="view-dashboard" class="space-y-8 animate-fade-in flex-grow">
+            <div class="text-center space-y-2 glass p-6 rounded-2xl border-none shadow-xl max-w-3xl mx-auto mt-4">
+                <h2 id="dash-title" class="text-3xl md:text-5xl font-extrabold text-white drop-shadow-lg">Papan Skor <span class="text-brand-cyan">Live</span></h2>
+                <p class="text-gray-300">Hasil pertandingan terbaru berdasarkan kategori gaya renang.</p>
+            </div>
+
+            <!-- TAMBAHAN: RUNNING TEXT -->
+            <div class="glass p-3 rounded-xl shadow-lg border-l-4 border-brand-cyan flex items-center print-hide">
+                <div class="bg-brand-cyan text-black px-3 py-1 rounded font-bold text-sm mr-3 z-10 shadow whitespace-nowrap">
+                    <i class="fa-solid fa-bullhorn"></i> INFO
+                </div>
+                <div class="marquee-container">
+                    <div id="dash-running-text" class="marquee-content font-semibold text-brand-cyan tracking-wide">
+                        Selamat datang di AquaRace Hub!
+                    </div>
+                </div>
+            </div>
+
+            <!-- 1. PAPAN JUARA -->
+            <div id="winners-section" class="space-y-4">
+                <h3 class="text-2xl font-bold border-b-2 border-brand-cyan pb-2 inline-block drop-shadow-md">Papan Juara Terkini</h3>
+                <div id="dashboard-winners" class="grid grid-cols-1 lg:grid-cols-2 gap-6"></div>
+            </div>
+
+            <!-- 2. TABEL AKUMULASI GAYA BEBAS + PUNGGUNG -->
+            <div id="accumulation-section" class="space-y-4 pt-8">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b-2 border-yellow-400 pb-2">
+                    <h3 class="text-2xl font-bold drop-shadow-md text-yellow-400 m-0">
+                        <i class="fa-solid fa-stopwatch-20"></i> Akumulasi Waktu (Bebas + Punggung)
+                    </h3>
+                    <!-- Filter Akumulasi -->
+                    <div class="flex gap-2 print-hide">
+                        <select id="filter-acc-gender" onchange="UI.renderAccumulationTable()" class="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:border-yellow-400 outline-none text-sm font-semibold">
+                            <option value="Semua" class="text-black">Semua Kategori</option>
+                            <option value="Putra" class="text-black">Putra</option>
+                            <option value="Putri" class="text-black">Putri</option>
+                        </select>
+                    </div>
+                </div>
+                <p class="text-sm text-gray-300 mt-2">Menampilkan total waktu gabungan atlet yang mengikuti kedua gaya tersebut.</p>
+                <div class="glass p-1 rounded-xl overflow-x-auto shadow-2xl">
+                    <table class="w-full text-left whitespace-nowrap bg-black/40 rounded-lg">
+                        <thead class="bg-black/80 text-yellow-400">
+                            <tr>
+                                <th class="p-4 font-semibold rounded-tl-lg">Peringkat</th>
+                                <th class="p-4 font-semibold">Nama Atlet</th>
+                                <th class="p-4 font-semibold">Tim / Kontingen</th>
+                                <th class="p-4 font-semibold">Kategori</th>
+                                <th class="p-4 font-semibold rounded-tr-lg text-right">Total Waktu Kombinasi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dashboard-accumulation" class="divide-y divide-white/10"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 3. TABEL SEMUA HASIL DENGAN FILTER -->
+            <div id="all-results-section" class="space-y-4 pt-8">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b-2 border-brand-cyan pb-2">
+                    <h3 class="text-2xl font-bold drop-shadow-md">Semua Hasil Pencatatan Waktu</h3>
+                    
+                    <!-- Fitur Filter -->
+                    <div class="flex gap-2 print-hide">
+                        <select id="filter-gender" onchange="UI.renderAllResultsTable()" class="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:border-brand-cyan outline-none text-sm font-semibold">
+                            <option value="Semua" class="text-black">Semua Kategori</option>
+                            <option value="Putra" class="text-black">Putra</option>
+                            <option value="Putri" class="text-black">Putri</option>
+                        </select>
+                        <select id="filter-style" onchange="UI.renderAllResultsTable()" class="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:border-brand-cyan outline-none text-sm font-semibold">
+                            <option value="Semua" class="text-black">Semua Gaya</option>
+                            <option value="Gaya Bebas" class="text-black">Gaya Bebas</option>
+                            <option value="Gaya Punggung" class="text-black">Gaya Punggung</option>
+                            <option value="Gaya Dada" class="text-black">Gaya Dada</option>
+                            <option value="Gaya Kupu-kupu" class="text-black">Gaya Kupu-kupu</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="glass p-1 rounded-xl overflow-x-auto shadow-2xl">
+                    <table class="w-full text-left whitespace-nowrap bg-black/40 rounded-lg">
+                        <thead class="bg-black/60 text-brand-cyan">
+                            <tr>
+                                <th class="p-4 font-semibold rounded-tl-lg">Peringkat</th>
+                                <th class="p-4 font-semibold">Nama Atlet</th>
+                                <th class="p-4 font-semibold">Tim / Kontingen</th>
+                                <th class="p-4 font-semibold">Kategori</th>
+                                <th class="p-4 font-semibold">Gaya Renang</th>
+                                <th class="p-4 font-semibold rounded-tr-lg text-right">Waktu (MM:SS.ms)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dashboard-all-results" class="divide-y divide-white/10"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- VIEW: LOGIN ADMIN -->
+        <section id="view-login" class="hidden flex-grow flex justify-center items-center h-[60vh]">
+            <div class="glass p-8 rounded-2xl w-full max-w-md shadow-2xl relative overflow-hidden">
+                <div class="absolute -top-10 -right-10 w-32 h-32 bg-brand-cyan rounded-full blur-3xl opacity-20"></div>
+                <h3 class="text-2xl font-bold mb-6 text-center border-b border-white/20 pb-4">Otorisasi Admin</h3>
+                <form id="loginForm" onsubmit="AppLogic.handleLogin(event)" class="space-y-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Password</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-lock absolute left-4 top-3.5 text-gray-400"></i>
+                            <input type="password" id="adminToken" required
+                                class="w-full bg-black/40 border border-white/20 rounded-xl px-10 py-3 text-white focus:outline-none focus:border-brand-cyan focus:ring-1 focus:ring-brand-cyan transition"
+                                placeholder="Masukkan Password">
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full bg-brand-cyan text-black font-bold py-3 rounded-xl hover:scale-105 transition transform shadow-[0_0_15px_rgba(var(--color-primary),0.4)]">
+                        Masuk Sistem
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <!-- VIEW: ADMIN PANEL -->
+        <section id="view-admin" class="hidden space-y-6 flex-grow">
+            <!-- Admin Tabs -->
+            <div class="glass rounded-2xl p-4 flex flex-wrap gap-2 justify-between items-center">
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="UI.switchAdminTab('athletes')" id="tab-athletes" class="admin-tab px-5 py-2 rounded-lg font-bold bg-brand-cyan text-black shadow-lg transition"><i class="fa-solid fa-users"></i> Database Atlet</button>
+                    <button onclick="UI.switchAdminTab('input')" id="tab-input" class="admin-tab px-5 py-2 rounded-lg font-bold bg-white/10 text-white hover:bg-white/20 transition"><i class="fa-solid fa-stopwatch"></i> Input Hasil</button>
+                    <button onclick="UI.switchAdminTab('settings')" id="tab-settings" class="admin-tab px-5 py-2 rounded-lg font-bold bg-white/10 text-white hover:bg-white/20 transition"><i class="fa-solid fa-cogs"></i> Pengaturan</button>
+                </div>
+                <button onclick="UI.showPrintModal()" class="bg-red-600 hover:bg-red-500 text-white px-5 py-2 rounded-lg font-bold transition shadow-lg flex items-center gap-2">
+                    <i class="fa-solid fa-file-pdf"></i> Cetak / PDF
+                </button>
+            </div>
+
+            <!-- Tab: Database Atlet -->
+            <div id="admin-athletes" class="glass-dark rounded-2xl p-6 md:p-8 animate-fade-in">
+                <h3 class="text-2xl font-bold mb-6 flex items-center gap-3"><i class="fa-solid fa-address-book text-brand-cyan"></i> Kelola Data Atlet</h3>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- Form Tambah & Import -->
+                    <div class="space-y-6">
+                        <div class="bg-black/40 rounded-xl p-5 border border-white/10">
+                            <h4 class="font-bold text-lg mb-4 text-brand-cyan">Registrasi Manual</h4>
+                            <div class="space-y-3">
+                                <input type="text" id="ath-name" class="w-full bg-white/5 border border-white/20 rounded px-3 py-2 text-white text-sm outline-none focus:border-brand-cyan" placeholder="Nama Lengkap">
+                                <input type="text" id="ath-team" class="w-full bg-white/5 border border-white/20 rounded px-3 py-2 text-white text-sm outline-none focus:border-brand-cyan" placeholder="Kontingen / Tim">
+                                <select id="ath-gender" class="w-full bg-brand-dark border border-white/20 rounded px-3 py-2 text-white text-sm outline-none focus:border-brand-cyan">
+                                    <option value="Putra">Putra</option>
+                                    <option value="Putri">Putri</option>
+                                </select>
+                                <button onclick="AppLogic.saveSingleAthlete()" class="w-full bg-brand-cyan text-black font-bold py-2 rounded-lg hover:bg-white transition mt-2">
+                                    <i class="fa-solid fa-plus"></i> Tambah Atlet
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="bg-black/40 rounded-xl p-5 border border-white/10 text-center">
+                            <h4 class="font-bold text-lg mb-4 text-green-400"><i class="fa-solid fa-file-excel"></i> Import Excel</h4>
+                            <button onclick="AppLogic.downloadAthleteTemplate()" class="text-sm text-green-400 hover:text-white underline mb-4 block w-full text-center">Download Template Excel</button>
+                            
+                            <div class="border border-dashed border-white/30 rounded-lg p-6 hover:border-green-400 transition cursor-pointer bg-white/5" onclick="document.getElementById('excel-file').click()">
+                                <input type="file" id="excel-file" accept=".xlsx, .xls" class="hidden" onchange="AppLogic.handleExcelSelect(event)">
+                                <i class="fa-solid fa-cloud-upload-alt text-3xl text-gray-400 mb-2"></i>
+                                <p class="text-xs text-gray-300">Pilih File (.xlsx)</p>
+                                <p id="file-name-display" class="mt-1 text-green-400 font-semibold text-xs"></p>
+                            </div>
+                            <button id="btn-process-excel" onclick="AppLogic.processAthleteExcel()" class="hidden w-full bg-green-600 text-white font-bold py-2 rounded-lg hover:bg-green-500 transition mt-4">
+                                Upload Data Excel
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tabel Daftar Atlet -->
+                    <div class="lg:col-span-2 bg-black/40 rounded-xl p-5 border border-white/10 flex flex-col">
+                        <h4 class="font-bold text-lg mb-4 text-brand-cyan flex justify-between">
+                            <span>Daftar Atlet Terdaftar</span>
+                            <span class="text-sm bg-white/10 px-2 py-1 rounded" id="athlete-count-badge">Total: 0</span>
+                        </h4>
+                        <div class="overflow-y-auto max-h-[500px] pr-2">
+                            <table class="w-full text-left whitespace-nowrap text-sm">
+                                <thead class="text-gray-400 sticky top-0 bg-brand-dark/90 backdrop-blur">
+                                    <tr>
+                                        <th class="pb-2 pt-2 px-2">Nama</th>
+                                        <th class="pb-2 pt-2 px-2">Kontingen</th>
+                                        <th class="pb-2 pt-2 px-2 text-center">L/P</th>
+                                        <th class="pb-2 pt-2 px-2 text-center">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="athlete-list-tbody" class="divide-y divide-white/5">
+                                    <!-- List Atlet via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Input Hasil Waktu -->
+            <div id="admin-input" class="hidden glass-dark rounded-2xl p-6 md:p-8 animate-fade-in">
+                <div class="flex flex-col md:flex-row justify-between md:items-end mb-6 gap-4">
+                    <div>
+                        <h3 class="text-2xl font-bold flex items-center gap-3"><i class="fa-solid fa-stopwatch text-brand-cyan"></i> Catat Waktu Pertandingan</h3>
+                        <p class="text-gray-400 text-sm mt-1">Pilih kategori dan gaya untuk menampilkan daftar atlet.</p>
+                    </div>
+                    <button type="button" onclick="UI.addInputRow()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm transition flex items-center gap-2 whitespace-nowrap h-fit">
+                        <i class="fa-solid fa-plus"></i> Tambah Baris Kosong
+                    </button>
+                </div>
+                
+                <form id="form-bulk-input" onsubmit="AppLogic.handleSaveBulkResult(event)">
+                    <!-- Filter Kategori & Gaya -->
+                    <div class="mb-4 bg-white/5 p-4 rounded-xl border border-white/10 flex flex-col md:flex-row md:items-center gap-6">
+                        <div class="flex items-center gap-3 flex-1">
+                            <label class="font-bold text-brand-cyan whitespace-nowrap"><i class="fa-solid fa-venus-mars"></i> Kategori :</label>
+                            <select id="global-inp-gender" onchange="UI.initInputTable()" class="w-full bg-brand-dark border border-white/20 rounded px-4 py-2 text-white focus:border-brand-cyan outline-none font-semibold">
+                                <option value="Putra">Putra</option>
+                                <option value="Putri">Putri</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center gap-3 flex-1">
+                            <label class="font-bold text-brand-cyan whitespace-nowrap"><i class="fa-solid fa-water"></i> Gaya Renang :</label>
+                            <select id="global-inp-style" class="w-full bg-brand-dark border border-white/20 rounded px-4 py-2 text-white focus:border-brand-cyan outline-none font-semibold">
+                                <!-- Options diisi via JS -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto mb-6 bg-black/20 p-2 rounded-xl border border-white/5">
+                        <table class="w-full text-left whitespace-nowrap">
+                            <thead class="text-brand-cyan text-sm border-b border-brand-cyan/30">
+                                <tr>
+                                    <th class="pb-3 px-2 w-[35%]">Pilih Atlet</th>
+                                    <th class="pb-3 px-2 w-[25%]">Kontingen</th>
+                                    <th class="pb-3 px-1 text-center">Menit</th>
+                                    <th class="pb-3 px-1 text-center">Detik</th>
+                                    <th class="pb-3 px-1 text-center">Mili</th>
+                                    <th class="pb-3 px-2 text-center">Hapus</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bulk-input-tbody" class="divide-y divide-white/5">
+                                <!-- Baris input via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <button type="submit" class="w-full bg-brand-cyan text-black font-bold py-3 rounded-xl hover:bg-white transition flex justify-center items-center gap-2 shadow-[0_0_15px_rgba(var(--color-primary),0.4)]">
+                        <i class="fa-solid fa-save"></i> Simpan Semua Catatan Waktu
+                    </button>
+                </form>
+            </div>
+
+            <!-- Tab: Pengaturan -->
+            <div id="admin-settings" class="hidden glass-dark rounded-2xl p-6 md:p-8 animate-fade-in">
+                <h3 class="text-2xl font-bold mb-6 flex items-center gap-3 border-b border-white/10 pb-4">
+                    <i class="fa-solid fa-cogs text-brand-cyan"></i> Pengaturan Sistem
+                </h3>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <!-- Kiri: Pengaturan Tampilan & App -->
+                    <div class="space-y-6">
+                        <div class="bg-black/40 rounded-xl p-5 border border-white/10">
+                            <h4 class="font-bold text-lg mb-4 text-brand-cyan"><i class="fa-solid fa-palette"></i> Tampilan Visual</h4>
+                            <div class="space-y-4">
+                                <div><label class="block text-sm text-gray-300 mb-1">Judul Aplikasi</label><input type="text" id="conf-title" class="w-full bg-white/5 border border-white/20 rounded px-3 py-2 text-white focus:border-brand-cyan outline-none"></div>
+                                <div><label class="block text-sm text-gray-300 mb-1">Pengumuman (Running Text)</label><input type="text" id="conf-running-text" class="w-full bg-white/5 border border-white/20 rounded px-3 py-2 text-white focus:border-brand-cyan outline-none" placeholder="Masukkan teks berjalan..."></div>
+                                <div><label class="block text-sm text-gray-300 mb-1">Warna Tema Utama</label><input type="color" id="conf-color" class="h-10 w-16 bg-transparent cursor-pointer rounded"></div>
+                                <div><label class="block text-sm text-gray-300 mb-1">Link URL Logo</label><input type="url" id="conf-logo" class="w-full bg-white/5 border border-white/20 rounded px-3 py-2 text-white focus:border-brand-cyan outline-none"></div>
+                                <div><label class="block text-sm text-gray-300 mb-1">Link URL Wallpaper Background</label><input type="url" id="conf-bg" class="w-full bg-white/5 border border-white/20 rounded px-3 py-2 text-white focus:border-brand-cyan outline-none"></div>
+                            </div>
+                        </div>
+
+                        <div class="bg-black/40 rounded-xl p-5 border border-white/10">
+                            <h4 class="font-bold text-lg mb-4 text-brand-cyan"><i class="fa-solid fa-print"></i> Pengaturan Cetak Kop</h4>
+                            <div class="space-y-4">
+                                <div><label class="block text-sm text-gray-300 mb-1">URL Logo O2SN (Kiri)</label><input type="url" id="conf-logo-o2sn" class="w-full bg-white/5 border border-white/20 rounded px-3 py-2 text-white"></div>
+                                <div><label class="block text-sm text-gray-300 mb-1">URL Logo KKG (Kanan)</label><input type="url" id="conf-logo-kkg" class="w-full bg-white/5 border border-white/20 rounded px-3 py-2 text-white"></div>
+                            </div>
+                        </div>
+
+                        <div class="bg-black/40 rounded-xl p-5 border border-white/10">
+                            <h4 class="font-bold text-lg mb-4 text-brand-cyan"><i class="fa-solid fa-shield-halved"></i> Keamanan</h4>
+                            <div><label class="block text-sm text-gray-300 mb-1">Ubah Password Admin</label><input type="text" id="conf-password" class="w-full bg-white/5 border border-white/20 rounded px-3 py-2 text-white"></div>
+                        </div>
+                    </div>
+
+                    <!-- Kanan: Pengaturan Dashboard -->
+                    <div class="bg-black/40 rounded-xl p-5 border border-white/10 h-fit flex flex-col">
+                        <h4 class="font-bold text-lg mb-4 text-brand-cyan"><i class="fa-solid fa-list-check"></i> Tampilkan di Papan Juara</h4>
+                        <p class="text-sm text-gray-400 mb-4">Pilih gaya renang mana yang akan ditampikan medali kemenangannya di halaman publik.</p>
+                        <div id="settings-styles-list" class="space-y-3 flex-grow"></div>
+                        <button onclick="AppLogic.saveAllSettings()" class="w-full bg-brand-cyan text-black font-bold py-3 rounded-xl hover:bg-white transition shadow-lg mt-8 flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-cloud-arrow-up"></i> Simpan Semua Pengaturan
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+        
+        <!-- FOOTER -->
+        <footer class="mt-auto pt-8 pb-4 text-center text-sm text-gray-400 w-full relative z-10">
+            Copyright &copy; 2026 KKG PJOK KEC. PESANGGRAHAN - <a href="https://instagram.com/ryzaraccman" target="_blank" rel="noopener noreferrer" class="text-brand-cyan hover:text-white transition inline-flex items-center gap-1"><i class="fa-brands fa-instagram text-lg"></i> @ryzaraccman</a>
+        </footer>
+
+    </main>
+
+    <!-- ================= JAVASCRIPT LOGIC ================= -->
+    <script>
+        const CONFIG = {
+            GAS_API_URL: "https://script.google.com/macros/s/AKfycbz_XXXXXXXXX_YOUR_WEB_APP_URL/exec" 
+        };
+
+        const SWIM_STYLES = ["Gaya Bebas", "Gaya Punggung", "Gaya Dada", "Gaya Kupu-kupu"];
+
+        const State = {
+            token: localStorage.getItem('app_token') || '',
+            isAdmin: false,
+            athletes: [], 
+            data: [], 
+            settings: [],
+            appConfig: {
+                APP_TITLE: "AquaRace Hub", APP_LOGO_URL: "", APP_BG_URL: "",
+                THEME_COLOR: "#00E5FF", ADMIN_PASSWORD: "admin", APP_LOGO_O2SN: "", APP_LOGO_KKG: "",
+                RUNNING_TEXT: "Selamat datang di AquaRace Hub - Sistem Hasil Pertandingan Renang Live!"
+            }
+        };
+
+        const API = {
+            async fetchGet() {
+                try {
+                    UI.showLoader(true);
+                    if (CONFIG.GAS_API_URL.includes("YOUR_WEB_APP_URL")) {
+                        console.warn("MOCK DATA AKTIF");
+                        if(State.athletes.length === 0) {
+                            State.athletes = [
+                                { id: "A1", name: "I Gede Siman", team: "Jawa Barat", gender: "Putra" },
+                                { id: "A2", name: "Glenn Victor", team: "DKI Jakarta", gender: "Putra" },
+                                { id: "A3", name: "Azzahra Permatahani", team: "Riau", gender: "Putri" }
+                            ];
+                            State.data = [
+                                { id: "1", name: "I Gede Siman", team: "Jawa Barat", gender: "Putra", style: "Gaya Punggung", mm: 0, ss: 25, ms: 12, total_ms: 25012 },
+                                { id: "1b", name: "I Gede Siman", team: "Jawa Barat", gender: "Putra", style: "Gaya Bebas", mm: 0, ss: 22, ms: 10, total_ms: 22010 },
+                                { id: "2", name: "Glenn Victor", team: "DKI Jakarta", gender: "Putra", style: "Gaya Punggung", mm: 0, ss: 26, ms: 5, total_ms: 26005 },
+                                { id: "2b", name: "Glenn Victor", team: "DKI Jakarta", gender: "Putra", style: "Gaya Bebas", mm: 0, ss: 23, ms: 15, total_ms: 23015 }
+                            ];
+                            State.settings = SWIM_STYLES.map(s => ({ style: s, status: "ON" }));
+                            State.settings.push({ style: "Akumulasi Bebas & Punggung", status: "ON" });
+                            State.appConfig.ADMIN_PASSWORD = "admin123";
+                            State.appConfig.RUNNING_TEXT = "MOCK INFO: Selamat bertanding kepada seluruh peserta AquaRace Hub 2026! Tetap junjung tinggi sportivitas.";
+                        }
+                        return;
+                    }
+
+                    const response = await fetch(CONFIG.GAS_API_URL);
+                    const result = await response.json();
+                    if(result.status === "success") {
+                        State.athletes = result.athletes || [];
+                        State.data = result.data || [];
+                        State.settings = result.settings || [];
+                        if (result.appConfig) State.appConfig = { ...State.appConfig, ...result.appConfig };
+                    }
+                } catch (error) {
+                    console.error("GET Error:", error);
+                    UI.toast('Gagal mengambil data dari server', 'error');
+                } finally {
+                    UI.showLoader(false);
+                }
+            },
+            
+            async fetchPost(payload) {
+                try {
+                    UI.showLoader(true);
+                    payload.token = State.token;
+                    
+                    if (CONFIG.GAS_API_URL.includes("YOUR_WEB_APP_URL")) {
+                        await new Promise(r => setTimeout(r, 500));
+                        if (payload.action === "login" && payload.token !== State.appConfig.ADMIN_PASSWORD) 
+                            return { status: "error", message: "Password yang Anda masukkan salah!" };
+                        if (payload.action === "saveAthlete") State.athletes.push({...payload.data, id: "M"+Date.now()});
+                        if (payload.action === "deleteAthlete") State.athletes = State.athletes.filter(a => a.id !== payload.id);
+                        if (payload.action === "importAthletes") payload.data.forEach(d => State.athletes.push({...d, id: "M"+Math.random()}));
+                        if (payload.action === "saveBulkResults") {
+                            payload.data.forEach(d => {
+                                d.total_ms = (d.mm * 60000) + (d.ss * 1000) + d.ms;
+                                State.data.push(d);
+                            });
+                        }
+                        if (payload.action === "updateAppConfig") {
+                            State.settings = payload.settings;
+                            State.appConfig = payload.appConfig;
+                        }
+                        return { status: "success", message: "Sukses (Mock Mode)" };
+                    }
+
+                    const response = await fetch(CONFIG.GAS_API_URL, {
+                        method: 'POST', body: JSON.stringify(payload), headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                    });
+                    return await response.json();
+                } catch (error) {
+                    return { status: "error", message: "Koneksi ke server gagal" };
+                } finally {
+                    UI.showLoader(false);
+                }
+            }
+        };
+
+        const AppLogic = {
+            async init() {
+                await API.fetchGet();
+                UI.applyAppConfig();
+                UI.renderDashboard();
+                if (State.token) {
+                    State.isAdmin = true;
+                    this.populateSettingsForm();
+                    UI.renderAthleteList();
+                    UI.initInputTable(); 
+                }
+            },
+
+            async handleLogin(e) {
+                e.preventDefault();
+                const token = document.getElementById('adminToken').value;
+                State.token = token;
+                
+                const res = await API.fetchPost({ action: "login" });
+                if (res.status === "success") {
+                    localStorage.setItem('app_token', token);
+                    State.isAdmin = true;
+                    UI.toast('Login Berhasil!', 'success');
+                    document.getElementById('adminToken').value = '';
+                    UI.navigate('admin');
+                    this.populateSettingsForm();
+                    UI.renderAthleteList();
+                    UI.initInputTable();
+                } else {
+                    State.token = ''; localStorage.removeItem('app_token');
+                    Swal.fire({ 
+                        icon: 'error', 
+                        title: 'Akses Ditolak', 
+                        text: res.message, 
+                        background: '#1a202c', 
+                        color: '#fff',
+                        customClass: { popup: 'rounded-3xl border border-white/10' }
+                    });
+                }
+            },
+
+            async saveSingleAthlete() {
+                const name = document.getElementById('ath-name').value.trim();
+                const team = document.getElementById('ath-team').value.trim();
+                const gender = document.getElementById('ath-gender').value;
+
+                if (!name || !team) return UI.toast("Nama & Kontingen wajib diisi!", "error");
+
+                const res = await API.fetchPost({ action: "saveAthlete", data: { name, team, gender } });
+                if (res.status === "success") {
+                    document.getElementById('ath-name').value = '';
+                    UI.toast('Atlet ditambahkan', 'success');
+                    await API.fetchGet();
+                    UI.renderAthleteList();
+                } else UI.toast(res.message, 'error');
+            },
+
+            async deleteAthlete(id) {
+                if(!confirm("Yakin ingin menghapus atlet ini?")) return;
+                const res = await API.fetchPost({ action: "deleteAthlete", id: id });
+                if(res.status === "success") {
+                    UI.toast("Atlet dihapus", "success");
+                    await API.fetchGet();
+                    UI.renderAthleteList();
+                } else UI.toast(res.message, "error");
+            },
+
+            excelDataBuffer: null,
+            downloadAthleteTemplate() {
+                const ws_data = [
+                    ["Nama Atlet", "Tim/Kontingen", "Jenis Kelamin"],
+                    ["Atlet Contoh Putra", "Jawa Barat", "Putra"],
+                    ["Atlet Contoh Putri", "DKI Jakarta", "Putri"]
+                ];
+                const ws = XLSX.utils.aoa_to_sheet(ws_data);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Database_Atlet");
+                XLSX.writeFile(wb, "Template_Import_Atlet.xlsx");
+            },
+
+            handleExcelSelect(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                document.getElementById('file-name-display').innerText = file.name;
+                document.getElementById('btn-process-excel').classList.remove('hidden');
+
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    const bstr = evt.target.result;
+                    const wb = XLSX.read(bstr, { type: 'binary' });
+                    this.excelDataBuffer = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+                };
+                reader.readAsBinaryString(file);
+            },
+
+            async processAthleteExcel() {
+                if (!this.excelDataBuffer || this.excelDataBuffer.length === 0) return UI.toast("File kosong", "error");
+
+                const formattedData = this.excelDataBuffer.map(row => ({
+                    name: row["Nama Atlet"],
+                    team: row["Tim/Kontingen"],
+                    gender: row["Jenis Kelamin"] === "Putri" ? "Putri" : "Putra" 
+                })).filter(r => r.name); 
+
+                const res = await API.fetchPost({ action: "importAthletes", data: formattedData });
+                if (res.status === "success") {
+                    UI.toast(`${formattedData.length} data atlet diimport!`, 'success');
+                    document.getElementById('file-name-display').innerText = '';
+                    document.getElementById('btn-process-excel').classList.add('hidden');
+                    this.excelDataBuffer = null;
+                    await API.fetchGet();
+                    UI.renderAthleteList();
+                } else UI.toast(res.message, "error");
+            },
+
+            async handleSaveBulkResult(e) {
+                e.preventDefault();
+                const rows = document.querySelectorAll('.bulk-row');
+                const athletesToSave = [];
+                const globalGender = document.getElementById('global-inp-gender').value;
+                const globalStyle = document.getElementById('global-inp-style').value;
+
+                rows.forEach(row => {
+                    const sel = row.querySelector('.inp-name');
+                    const name = sel.value;
+                    const team = sel.options[sel.selectedIndex]?.getAttribute('data-team') || "";
+                    if (!name) return; 
+
+                    athletesToSave.push({
+                        name: name, team: team, gender: globalGender, style: globalStyle,
+                        mm: parseInt(row.querySelector('.inp-mm').value || 0),
+                        ss: parseInt(row.querySelector('.inp-ss').value || 0),
+                        ms: parseInt(row.querySelector('.inp-ms').value || 0)
+                    });
+                });
+
+                if (athletesToSave.length === 0) return UI.toast('Tidak ada data valid. Pilih minimal 1 atlet.', 'error');
+
+                const res = await API.fetchPost({ action: "saveBulkResults", data: athletesToSave });
+                if (res.status === "success") {
+                    UI.toast(`${athletesToSave.length} Hasil berhasil disimpan!`, 'success');
+                    UI.initInputTable(); 
+                    await API.fetchGet(); 
+                    UI.renderDashboard();
+                } else UI.toast(res.message, 'error');
+            },
+
+            populateSettingsForm() {
+                document.getElementById('conf-title').value = State.appConfig.APP_TITLE || "";
+                document.getElementById('conf-running-text').value = State.appConfig.RUNNING_TEXT || "";
+                document.getElementById('conf-logo').value = State.appConfig.APP_LOGO_URL || "";
+                document.getElementById('conf-bg').value = State.appConfig.APP_BG_URL || "";
+                document.getElementById('conf-color').value = State.appConfig.THEME_COLOR || "#00E5FF";
+                document.getElementById('conf-password').value = State.appConfig.ADMIN_PASSWORD || "";
+                document.getElementById('conf-logo-o2sn').value = State.appConfig.APP_LOGO_O2SN || "";
+                document.getElementById('conf-logo-kkg').value = State.appConfig.APP_LOGO_KKG || "";
+
+                const container = document.getElementById('settings-styles-list');
+                container.innerHTML = '';
+                
+                // --- 1. Setting Papan Juara ---
+                container.insertAdjacentHTML('beforeend', `<div class="text-sm font-bold text-gray-400 mt-2 mb-2">Papan Juara (Top 3)</div>`);
+                SWIM_STYLES.forEach(style => {
+                    const isChecked = (State.settings.find(s => s.style === style)?.status !== "OFF");
+                    container.insertAdjacentHTML('beforeend', `
+                        <label class="flex items-center justify-between p-3 bg-white/5 rounded-lg cursor-pointer hover:bg-white/10 border border-white/5 transition mb-2">
+                            <span class="font-medium">${style}</span>
+                            <div class="relative inline-block w-12 h-6 rounded-full shadow-inner">
+                                <input type="checkbox" class="peer opacity-0 w-0 h-0 style-toggle-cb" value="${style}" ${isChecked ? 'checked' : ''}>
+                                <span class="absolute cursor-pointer top-0 left-0 right-0 bottom-0 bg-gray-600 rounded-full duration-300 peer-checked:bg-brand-cyan before:content-[''] before:absolute before:w-4 before:h-4 before:bottom-1 before:left-1 before:bg-white before:rounded-full before:duration-300 peer-checked:before:translate-x-6"></span>
+                            </div>
+                        </label>
+                    `);
+                });
+
+                // --- 2. Setting Tabel Akumulasi ---
+                container.insertAdjacentHTML('beforeend', `<div class="text-sm font-bold text-gray-400 mt-4 mb-2">Tabel Khusus</div>`);
+                const accStyle = "Akumulasi Bebas & Punggung";
+                const isAccChecked = (State.settings.find(s => s.style === accStyle)?.status !== "OFF");
+                container.insertAdjacentHTML('beforeend', `
+                    <label class="flex items-center justify-between p-3 bg-yellow-500/10 rounded-lg cursor-pointer hover:bg-yellow-500/20 border border-yellow-500/30 transition mb-2">
+                        <span class="font-medium text-yellow-400"><i class="fa-solid fa-stopwatch-20"></i> ${accStyle}</span>
+                        <div class="relative inline-block w-12 h-6 rounded-full shadow-inner">
+                            <input type="checkbox" class="peer opacity-0 w-0 h-0 style-toggle-cb" value="${accStyle}" ${isAccChecked ? 'checked' : ''}>
+                            <span class="absolute cursor-pointer top-0 left-0 right-0 bottom-0 bg-gray-600 rounded-full duration-300 peer-checked:bg-yellow-400 before:content-[''] before:absolute before:w-4 before:h-4 before:bottom-1 before:left-1 before:bg-white before:rounded-full before:duration-300 peer-checked:before:translate-x-6"></span>
+                        </div>
+                    </label>
+                `);
+            },
+
+            async saveAllSettings() {
+                const newSettings = Array.from(document.querySelectorAll('.style-toggle-cb')).map(cb => ({
+                    style: cb.value, status: cb.checked ? "ON" : "OFF"
+                }));
+                const newConfig = {
+                    APP_TITLE: document.getElementById('conf-title').value.trim() || "AquaRace Hub",
+                    RUNNING_TEXT: document.getElementById('conf-running-text').value.trim(),
+                    APP_LOGO_URL: document.getElementById('conf-logo').value.trim(), APP_BG_URL: document.getElementById('conf-bg').value.trim(),
+                    THEME_COLOR: document.getElementById('conf-color').value || "#00E5FF", ADMIN_PASSWORD: document.getElementById('conf-password').value.trim(),
+                    APP_LOGO_O2SN: document.getElementById('conf-logo-o2sn').value.trim(), APP_LOGO_KKG: document.getElementById('conf-logo-kkg').value.trim()
+                };
+
+                if (!newConfig.ADMIN_PASSWORD) return UI.toast("Password wajib diisi!", "error");
+
+                const res = await API.fetchPost({ action: "updateAppConfig", settings: newSettings, appConfig: newConfig });
+                if(res.status === "success") {
+                    if (State.token !== newConfig.ADMIN_PASSWORD) { State.token = newConfig.ADMIN_PASSWORD; localStorage.setItem('app_token', State.token); }
+                    UI.toast('Pengaturan disimpan!', 'success');
+                    await API.fetchGet();
+                    UI.applyAppConfig(); UI.renderDashboard();
+                } else UI.toast(res.message, 'error');
+            },
+
+            executePrint(type, subVal) {
+                const appTitle = State.appConfig.APP_TITLE || "Hasil Pertandingan Renang";
+                const logoO2SN = State.appConfig.APP_LOGO_O2SN ? `<img src="${State.appConfig.APP_LOGO_O2SN}" alt="O2SN" style="max-height: 80px; width: auto;">` : `<div style="width: 80px;"></div>`;
+                const logoKKG = State.appConfig.APP_LOGO_KKG ? `<img src="${State.appConfig.APP_LOGO_KKG}" alt="KKG" style="max-height: 80px; width: auto;">` : `<div style="width: 80px;"></div>`;
+
+                let tableHtml = '';
+                let subtitle = '';
+
+                if (type === 'semua') {
+                    subtitle = "SEMUA HASIL PENCATATAN WAKTU";
+                    tableHtml = this.buildPrintTableAllResults("Semua", "Semua");
+                } else if (type === 'per_gaya') {
+                    subtitle = `HASIL PENCATATAN WAKTU - ${subVal.toUpperCase()}`;
+                    tableHtml = this.buildPrintTableAllResults("Semua", subVal);
+                } else if (type === 'akumulasi') {
+                    subtitle = `AKUMULASI WAKTU (BEBAS + PUNGGUNG)${subVal !== 'Semua' ? ' - KATEGORI ' + subVal.toUpperCase() : ''}`;
+                    tableHtml = this.buildPrintTableAccumulation(subVal);
+                }
+
+                const printWindow = window.open('', '_blank', 'width=1000,height=800');
+                printWindow.document.write(`
+                    <html>
+                    <head>
+                        <title>Cetak Laporan - ${appTitle}</title>
+                        <style>
+                            body { font-family: sans-serif; background: white; color: black; padding: 2rem; margin: 0; }
+                            table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 14px; }
+                            th, td { border: 1px solid #000; padding: 10px; text-align: left; }
+                            th { background-color: #f3f4f6; font-weight: bold; text-align: center; }
+                            .text-center { text-align: center; }
+                            .text-right { text-align: right; }
+                            .font-bold { font-weight: bold; }
+                            .kop-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #000; padding-bottom: 15px; margin-bottom: 20px; }
+                            .kop-title { text-align: center; flex-grow: 1; margin: 0 20px; }
+                            h2 { margin: 0; padding: 0; font-size: 22px; text-transform: uppercase; }
+                            h3 { margin: 5px 0 0 0; padding: 0; font-size: 16px; font-weight: normal; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="kop-header">
+                            ${logoO2SN}
+                            <div class="kop-title">
+                                <h2>LAPORAN RESMI KLASEMEN WAKTU<br>${appTitle}</h2>
+                                <h3>${subtitle}</h3>
+                            </div>
+                            ${logoKKG}
+                        </div>
+                        ${tableHtml}
+                        <div style="margin-top: 40px; text-align: right; font-size: 14px;">
+                            <p>Dicetak pada: ${new Date().toLocaleString('id-ID')}</p>
+                        </div>
+                    </body>
+                    </html>
+                `);
+                printWindow.document.close();
+                printWindow.focus();
+                setTimeout(() => { printWindow.print(); printWindow.close(); }, 1000);
+            },
+
+            buildPrintTableAllResults(filterGender, filterStyle) {
+                let filteredData = State.data.filter(item => {
+                    let matchGender = filterGender === "Semua" || item.gender === filterGender;
+                    let matchStyle = filterStyle === "Semua" || item.style === filterStyle;
+                    return matchGender && matchStyle;
+                });
+
+                if (filteredData.length === 0) return "<p class='text-center' style='margin-top: 20px;'>Belum ada data pencatatan.</p>";
+
+                filteredData.sort((a, b) => {
+                    if (a.style !== b.style) return a.style.localeCompare(b.style);
+                    if (a.gender !== b.gender) {
+                        if (a.gender === 'Putra') return -1;
+                        if (b.gender === 'Putra') return 1;
+                        return a.gender.localeCompare(b.gender);
+                    }
+                    return a.total_ms - b.total_ms;
+                });
+
+                let html = `<table><thead><tr><th style="width:50px;">Rank</th><th>Nama Atlet</th><th>Kontingen</th><th>Kategori</th><th>Gaya Renang</th><th>Waktu</th></tr></thead><tbody>`;
+
+                let currentGroup = "";
+                let rankCounter = 1;
+
+                filteredData.forEach((ath) => {
+                    const groupKey = `${ath.style}_${ath.gender}`;
+                    if (groupKey !== currentGroup) {
+                        currentGroup = groupKey;
+                        rankCounter = 1;
+                        html += `<tr><td colspan="6" style="background-color: #e5e7eb; font-weight: bold; text-align: center;">${ath.style} - ${ath.gender.toUpperCase()}</td></tr>`;
+                    }
+
+                    const timeStr = `${String(Math.floor(ath.total_ms / 60000)).padStart(2, '0')}:${String(Math.floor((ath.total_ms % 60000)/1000)).padStart(2, '0')}.${String(ath.total_ms % 1000).padStart(2, '0')}`;
+                    html += `<tr><td class="text-center">${rankCounter}</td><td>${ath.name}</td><td>${ath.team}</td><td class="text-center">${ath.gender}</td><td class="text-center">${ath.style}</td><td class="text-right font-bold">${timeStr}</td></tr>`;
+                    rankCounter++;
+                });
+                html += `</tbody></table>`;
+                return html;
+            },
+
+            buildPrintTableAccumulation(filterGender) {
+                const athleteMap = {};
+                State.data.forEach(item => {
+                    if (item.style === "Gaya Bebas" || item.style === "Gaya Punggung") {
+                        const key = `${item.name}_${item.gender}_${item.team}`;
+                        if (!athleteMap[key]) athleteMap[key] = { name: item.name, gender: item.gender, team: item.team, bebas_ms: 0, punggung_ms: 0, total_ms: 0, count: 0 };
+                        
+                        if (item.style === "Gaya Bebas" && athleteMap[key].bebas_ms === 0) {
+                            athleteMap[key].bebas_ms = item.total_ms;
+                            athleteMap[key].total_ms += item.total_ms;
+                            athleteMap[key].count++;
+                        } else if (item.style === "Gaya Punggung" && athleteMap[key].punggung_ms === 0) {
+                            athleteMap[key].punggung_ms = item.total_ms;
+                            athleteMap[key].total_ms += item.total_ms;
+                            athleteMap[key].count++;
+                        }
+                    }
+                });
+
+                let accumulatedAthletes = Object.values(athleteMap).filter(a => a.count === 2);
+                if (filterGender !== "Semua") accumulatedAthletes = accumulatedAthletes.filter(a => a.gender === filterGender);
+
+                if (accumulatedAthletes.length === 0) return "<p class='text-center' style='margin-top: 20px;'>Belum ada atlet yang menyelesaikan kedua gaya tersebut.</p>";
+
+                accumulatedAthletes.sort((a, b) => {
+                    if (a.gender !== b.gender) {
+                        if (a.gender === 'Putra') return -1;
+                        if (b.gender === 'Putra') return 1;
+                        return a.gender.localeCompare(b.gender);
+                    }
+                    return a.total_ms - b.total_ms;
+                });
+
+                let html = `<table><thead><tr><th style="width:50px;">Rank</th><th>Nama Atlet</th><th>Kontingen</th><th>Kategori</th><th>Total Waktu (Bebas + Punggung)</th></tr></thead><tbody>`;
+
+                let currentGender = "";
+                let rankCounter = 1;
+
+                accumulatedAthletes.forEach((ath) => {
+                    if (ath.gender !== currentGender) {
+                        currentGender = ath.gender;
+                        rankCounter = 1;
+                        html += `<tr><td colspan="5" style="background-color: #e5e7eb; font-weight: bold; text-align: center;">KATEGORI ${currentGender.toUpperCase()}</td></tr>`;
+                    }
+
+                    const timeStr = `${String(Math.floor(ath.total_ms / 60000)).padStart(2, '0')}:${String(Math.floor((ath.total_ms % 60000)/1000)).padStart(2, '0')}.${String(ath.total_ms % 1000).padStart(2, '0')}`;
+                    html += `<tr><td class="text-center">${rankCounter}</td><td>${ath.name}</td><td>${ath.team}</td><td class="text-center">${ath.gender}</td><td class="text-right font-bold">${timeStr}</td></tr>`;
+                    rankCounter++;
+                });
+                html += `</tbody></table>`;
+                return html;
+            }
+        };
+
+        const UI = {
+            showPrintModal() {
+                Swal.fire({
+                    title: 'Opsi Cetak Laporan',
+                    html: `
+                        <div class="text-left text-sm space-y-4">
+                            <div>
+                                <label class="block font-bold mb-1 text-gray-300">Pilih Jenis Laporan</label>
+                                <select id="print-type" class="w-full bg-black/50 border border-white/20 rounded p-2 text-white outline-none focus:border-brand-cyan">
+                                    <option value="semua">Semua Hasil Pencatatan (Lengkap)</option>
+                                    <option value="per_gaya">Berdasarkan Gaya Renang</option>
+                                    <option value="akumulasi">Akumulasi (Bebas + Punggung)</option>
+                                </select>
+                            </div>
+                            <div id="print-sub-options"></div>
+                        </div>
+                    `,
+                    background: '#1a202c',
+                    color: '#fff',
+                    showCancelButton: true,
+                    confirmButtonText: '<i class="fa-solid fa-print"></i> Siapkan PDF',
+                    cancelButtonText: 'Batal',
+                    confirmButtonColor: '#00E5FF',
+                    customClass: { popup: 'rounded-3xl border border-white/10' },
+                    didOpen: () => {
+                        const typeSel = document.getElementById('print-type');
+                        const subDiv = document.getElementById('print-sub-options');
+                        typeSel.onchange = () => {
+                            if (typeSel.value === 'per_gaya') {
+                                let opts = SWIM_STYLES.map(s => `<option value="${s}">${s}</option>`).join('');
+                                subDiv.innerHTML = `<label class="block font-bold mb-1 text-gray-300 mt-3">Pilih Gaya Renang</label><select id="print-sub-val" class="w-full bg-black/50 border border-white/20 rounded p-2 text-white outline-none focus:border-brand-cyan">${opts}</select>`;
+                            } else if (typeSel.value === 'akumulasi') {
+                                subDiv.innerHTML = `<label class="block font-bold mb-1 text-gray-300 mt-3">Pilih Kategori Gender</label><select id="print-sub-val" class="w-full bg-black/50 border border-white/20 rounded p-2 text-white outline-none focus:border-brand-cyan"><option value="Semua">Semua (Putra & Putri)</option><option value="Putra">Putra Saja</option><option value="Putri">Putri Saja</option></select>`;
+                            } else {
+                                subDiv.innerHTML = '';
+                            }
+                        };
+                        document.querySelector('.swal2-confirm').style.color = '#000'; // Make confirm button text black for visibility on cyan
+                    },
+                    preConfirm: () => {
+                        const type = document.getElementById('print-type').value;
+                        const subVal = document.getElementById('print-sub-val') ? document.getElementById('print-sub-val').value : "Semua";
+                        return { type, subVal };
+                    }
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        AppLogic.executePrint(result.value.type, result.value.subVal);
+                    }
+                });
+            },
+
+            navigate(view) {
+                if(view === 'admin' && !State.isAdmin) view = 'login';
+                document.getElementById('view-dashboard').classList.add('hidden');
+                document.getElementById('view-login').classList.add('hidden');
+                document.getElementById('view-admin').classList.add('hidden');
+                document.getElementById(`view-${view}`).classList.remove('hidden');
+                if (view === 'dashboard') this.renderDashboard();
+            },
+
+            switchAdminTab(tabName) {
+                document.querySelectorAll('.admin-tab').forEach(el => {
+                    el.classList.remove('bg-brand-cyan', 'text-black', 'shadow-lg');
+                    el.classList.add('bg-white/10', 'text-white');
+                });
+                const activeBtn = document.getElementById(`tab-${tabName}`);
+                activeBtn.classList.remove('bg-white/10', 'text-white');
+                activeBtn.classList.add('bg-brand-cyan', 'text-black', 'shadow-lg');
+
+                document.getElementById('admin-athletes').classList.add('hidden');
+                document.getElementById('admin-input').classList.add('hidden');
+                document.getElementById('admin-settings').classList.add('hidden');
+                document.getElementById(`admin-${tabName}`).classList.remove('hidden');
+            },
+
+            applyAppConfig() {
+                const conf = State.appConfig;
+                document.title = conf.APP_TITLE || "Sistem Renang";
+                document.getElementById('nav-title').innerText = conf.APP_TITLE || "AquaRace Hub";
+                
+                const runningTextEl = document.getElementById('dash-running-text');
+                if(runningTextEl) runningTextEl.innerText = conf.RUNNING_TEXT || "Selamat datang di AquaRace Hub!";
+                
+                const logoEl = document.getElementById('nav-logo'), iconEl = document.getElementById('nav-icon');
+                if (conf.APP_LOGO_URL) { logoEl.src = conf.APP_LOGO_URL; logoEl.classList.remove('hidden'); iconEl.classList.add('hidden'); } 
+                else { logoEl.classList.add('hidden'); iconEl.classList.remove('hidden'); }
+
+                document.documentElement.style.setProperty('--bg-wallpaper', conf.APP_BG_URL ? `url('${conf.APP_BG_URL}')` : `none`);
+                if (conf.THEME_COLOR) {
+                    let hex = conf.THEME_COLOR.replace('#', '');
+                    if(hex.length === 3) hex = hex.split('').map(x => x+x).join('');
+                    document.documentElement.style.setProperty('--color-primary', `${parseInt(hex.substring(0,2),16)}, ${parseInt(hex.substring(2,4),16)}, ${parseInt(hex.substring(4,6),16)}`);
+                }
+            },
+
+            renderAthleteList() {
+                const tbody = document.getElementById('athlete-list-tbody');
+                tbody.innerHTML = '';
+                document.getElementById('athlete-count-badge').innerText = `Total: ${State.athletes.length}`;
+                
+                State.athletes.forEach(a => {
+                    const genderBadge = a.gender === 'Putra' ? '<span class="text-blue-400">L</span>' : '<span class="text-pink-400">P</span>';
+                    tbody.insertAdjacentHTML('beforeend', `
+                        <tr class="hover:bg-white/5">
+                            <td class="py-2 px-2 font-medium">${a.name}</td>
+                            <td class="py-2 px-2 text-gray-400">${a.team}</td>
+                            <td class="py-2 px-2 text-center">${genderBadge}</td>
+                            <td class="py-2 px-2 text-center">
+                                <button onclick="AppLogic.deleteAthlete('${a.id}')" class="text-red-400 hover:text-red-300 p-1"><i class="fa-solid fa-trash"></i></button>
+                            </td>
+                        </tr>
+                    `);
+                });
+            },
+
+            initInputTable() {
+                const tbody = document.getElementById('bulk-input-tbody');
+                if(!tbody) return;
+
+                const globalStyleSelect = document.getElementById('global-inp-style');
+                if(globalStyleSelect.options.length === 0) {
+                    SWIM_STYLES.forEach(s => globalStyleSelect.innerHTML += `<option value="${s}">${s}</option>`);
+                }
+
+                tbody.innerHTML = '';
+                for(let i=0; i<3; i++) this.addInputRow();
+            },
+
+            addInputRow() {
+                const tbody = document.getElementById('bulk-input-tbody');
+                const globalGender = document.getElementById('global-inp-gender').value;
+                
+                const validAthletes = State.athletes.filter(a => a.gender === globalGender);
+                let optionsHtml = '<option value="">-- Pilih Atlet --</option>';
+                validAthletes.forEach(a => { optionsHtml += `<option value="${a.name}" data-team="${a.team}">${a.name}</option>`; });
+
+                const tr = document.createElement('tr');
+                tr.className = 'bulk-row hover:bg-white/5 transition';
+                tr.innerHTML = `
+                    <td class="py-2 px-1">
+                        <select class="inp-name w-full min-w-[150px] bg-white/5 border border-white/20 rounded px-3 py-2 text-white focus:border-brand-cyan outline-none text-sm" onchange="this.closest('tr').querySelector('.inp-team').value = this.options[this.selectedIndex].getAttribute('data-team') || ''">
+                            ${optionsHtml}
+                        </select>
+                    </td>
+                    <td class="py-2 px-1">
+                        <input type="text" class="inp-team w-full min-w-[120px] bg-white/5 border border-white/20 rounded px-3 py-2 text-gray-400 outline-none text-sm cursor-not-allowed" placeholder="Kontingen" readonly>
+                    </td>
+                    <td class="py-2 px-1"><input type="number" min="0" max="59" value="0" class="inp-mm w-16 bg-white/10 border border-white/20 rounded px-1 py-2 text-center text-white focus:border-brand-cyan outline-none text-sm font-mono mx-auto block"></td>
+                    <td class="py-2 px-1"><input type="number" min="0" max="59" value="0" class="inp-ss w-16 bg-white/10 border border-white/20 rounded px-1 py-2 text-center text-white focus:border-brand-cyan outline-none text-sm font-mono mx-auto block"></td>
+                    <td class="py-2 px-1"><input type="number" min="0" max="99" value="0" class="inp-ms w-16 bg-white/10 border border-white/20 rounded px-1 py-2 text-center text-white focus:border-brand-cyan outline-none text-sm font-mono mx-auto block"></td>
+                    <td class="py-2 px-1 text-center"><button type="button" onclick="this.closest('tr').remove()" class="text-red-400 hover:text-red-300 transition p-2"><i class="fa-solid fa-trash"></i></button></td>
+                `;
+                tbody.appendChild(tr);
+            },
+
+            renderDashboard() {
+                this.renderWinnersTable();
+                this.renderAccumulationTable();
+                this.renderAllResultsTable();
+            },
+
+            renderWinnersTable() {
+                const winnersContainer = document.getElementById('dashboard-winners');
+                winnersContainer.innerHTML = '';
+
+                if (State.data.length === 0) {
+                    winnersContainer.innerHTML = `<div class="col-span-full text-center text-gray-400 py-6 glass rounded-xl">Belum ada data pemenang.</div>`;
+                    return;
+                }
+
+                const activeStyles = State.settings.filter(s => s.status === "ON").map(s => s.style);
+                const groupedData = {};
+                
+                State.data.forEach(item => {
+                    const key = `${item.style}_${item.gender}`;
+                    if (!groupedData[key]) groupedData[key] = { style: item.style, gender: item.gender, title: `${item.style} - ${item.gender}`, athletes: [] };
+                    groupedData[key].athletes.push(item);
+                });
+
+                for (const [key, group] of Object.entries(groupedData)) {
+                    if (activeStyles.includes(group.style)) {
+                        group.athletes.sort((a, b) => a.total_ms - b.total_ms);
+                        let winnersHTML = '';
+                        const top3 = group.athletes.slice(0, 3);
+                        
+                        top3.forEach((ath, index) => {
+                            let rankIcon = `<span class="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-sm font-bold">${index + 1}</span>`;
+                            let cardStyle = "bg-black/40 border-white/5";
+                            if (index === 0) { rankIcon = `<i class="fa-solid fa-medal text-3xl text-yellow-400 drop-shadow-md"></i>`; cardStyle = "bg-gradient-to-r from-yellow-500/20 to-black/40 border-yellow-500/50 border"; }
+                            else if (index === 1) { rankIcon = `<i class="fa-solid fa-medal text-3xl text-gray-300 drop-shadow-md"></i>`; cardStyle = "bg-gradient-to-r from-gray-400/20 to-black/40 border-gray-400/50 border"; }
+                            else if (index === 2) { rankIcon = `<i class="fa-solid fa-medal text-3xl text-yellow-700 drop-shadow-md"></i>`; cardStyle = "bg-gradient-to-r from-yellow-700/20 to-black/40 border-yellow-700/50 border"; }
+
+                            const timeStr = `${String(ath.mm).padStart(2, '0')}:${String(ath.ss).padStart(2, '0')}.${String(ath.ms).padStart(2, '0')}`;
+                            winnersHTML += `
+                                <div class="flex items-center justify-between p-3 rounded-xl mb-2 ${cardStyle} transition hover:scale-[1.02] shadow-sm">
+                                    <div class="flex items-center gap-4">
+                                        <div class="w-10 flex justify-center">${rankIcon}</div>
+                                        <div>
+                                            <h4 class="font-bold text-lg leading-tight text-white">${ath.name}</h4>
+                                            <p class="text-xs text-brand-cyan font-semibold">${ath.team}</p>
+                                        </div>
+                                    </div>
+                                    <div class="font-mono text-xl font-bold tracking-wider text-white drop-shadow-sm">${timeStr}</div>
+                                </div>
+                            `;
+                        });
+
+                        if(winnersHTML !== '') {
+                            const genderIcon = group.gender === 'Putra' ? '<i class="fa-solid fa-mars text-blue-400"></i>' : '<i class="fa-solid fa-venus text-pink-400"></i>';
+                            winnersContainer.insertAdjacentHTML('beforeend', `
+                                <div class="glass p-6 rounded-2xl shadow-xl border-t-4 border-t-brand-cyan">
+                                    <h3 class="text-xl font-bold mb-4 flex items-center gap-2 border-b border-white/10 pb-3">
+                                        ${genderIcon} ${group.title}
+                                    </h3>
+                                    <div class="space-y-2">${winnersHTML}</div>
+                                </div>
+                            `);
+                        }
+                    }
+                }
+                if (winnersContainer.innerHTML === '') winnersContainer.innerHTML = `<div class="col-span-full text-center text-gray-400 py-6 glass rounded-xl">Papan juara disembunyikan.</div>`;
+            },
+
+            renderAccumulationTable() {
+                const accContainer = document.getElementById('dashboard-accumulation');
+                accContainer.innerHTML = '';
+
+                // Cek pengaturan hide/show dari Admin
+                const accSetting = State.settings.find(s => s.style === "Akumulasi Bebas & Punggung");
+                const isAccActive = accSetting ? accSetting.status === "ON" : true;
+
+                if (!isAccActive) {
+                    accContainer.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-gray-400">Tabel akumulasi disembunyikan (Lihat Pengaturan Admin).</td></tr>`;
+                    return;
+                }
+
+                const filterGender = document.getElementById('filter-acc-gender') ? document.getElementById('filter-acc-gender').value : "Semua";
+
+                // Hitung akumulasi untuk Gaya Bebas & Gaya Punggung
+                const athleteMap = {};
+                State.data.forEach(item => {
+                    if (item.style === "Gaya Bebas" || item.style === "Gaya Punggung") {
+                        const key = `${item.name}_${item.gender}_${item.team}`;
+                        if (!athleteMap[key]) athleteMap[key] = { name: item.name, gender: item.gender, team: item.team, bebas_ms: 0, punggung_ms: 0, total_ms: 0, count: 0 };
+                        
+                        // Memastikan satu gaya hanya dihitung satu kali (menghindari duplikasi waktu jika atlet diinput dobel)
+                        if (item.style === "Gaya Bebas" && athleteMap[key].bebas_ms === 0) {
+                            athleteMap[key].bebas_ms = item.total_ms;
+                            athleteMap[key].total_ms += item.total_ms;
+                            athleteMap[key].count++;
+                        } else if (item.style === "Gaya Punggung" && athleteMap[key].punggung_ms === 0) {
+                            athleteMap[key].punggung_ms = item.total_ms;
+                            athleteMap[key].total_ms += item.total_ms;
+                            athleteMap[key].count++;
+                        }
+                    }
+                });
+
+                // Filter atlet yang benar-benar mengikuti KEDUA gaya
+                let accumulatedAthletes = Object.values(athleteMap).filter(a => a.count === 2);
+
+                if (filterGender !== "Semua") {
+                    accumulatedAthletes = accumulatedAthletes.filter(a => a.gender === filterGender);
+                }
+
+                if (accumulatedAthletes.length === 0) {
+                    accContainer.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-gray-400">Belum ada atlet yang menyelesaikan kedua gaya (Bebas & Punggung).</td></tr>`;
+                    return;
+                }
+
+                // Sort by gender (Putra first) then by total accumulated time
+                accumulatedAthletes.sort((a, b) => {
+                    if (a.gender !== b.gender) {
+                        if (a.gender === 'Putra') return -1;
+                        if (b.gender === 'Putra') return 1;
+                        return a.gender.localeCompare(b.gender);
+                    }
+                    return a.total_ms - b.total_ms;
+                });
+
+                let currentGender = "";
+                let rankCounter = 1;
+
+                accumulatedAthletes.forEach((ath) => {
+                    if (ath.gender !== currentGender) {
+                        currentGender = ath.gender;
+                        rankCounter = 1; // Reset ranking untuk gender ini
+                        
+                        // Header Kategori Gender
+                        const genderIcon = currentGender === 'Putra' ? '<i class="fa-solid fa-mars text-blue-400"></i>' : '<i class="fa-solid fa-venus text-pink-400"></i>';
+                        accContainer.insertAdjacentHTML('beforeend', `
+                            <tr class="bg-brand-dark/80">
+                                <td colspan="5" class="p-3 font-bold text-lg text-brand-cyan border-t-2 border-brand-cyan border-b border-brand-cyan/30">
+                                    ${genderIcon} KATEGORI ${currentGender.toUpperCase()}
+                                </td>
+                            </tr>
+                        `);
+                    }
+
+                    const mm = Math.floor(ath.total_ms / 60000);
+                    const ss = Math.floor((ath.total_ms % 60000) / 1000);
+                    const ms = ath.total_ms % 1000;
+                    const timeStr = `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}.${String(ms).padStart(2, '0')}`;
+                    
+                    let rankClass = rankCounter === 1 ? "text-yellow-400 font-bold" : (rankCounter === 2 ? "text-gray-200 font-bold" : (rankCounter === 3 ? "text-yellow-600 font-bold" : "text-gray-300"));
+                    const genderBadgeClass = ath.gender === 'Putra' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-pink-500/20 text-pink-400 border-pink-500/30';
+
+                    accContainer.insertAdjacentHTML('beforeend', `
+                        <tr class="hover:bg-white/10 transition group">
+                            <td class="p-4 ${rankClass}"># ${rankCounter}</td>
+                            <td class="p-4 font-medium text-white">${ath.name}</td>
+                            <td class="p-4 text-gray-400">${ath.team}</td>
+                            <td class="p-4"><span class="${genderBadgeClass} border px-2 py-1 rounded text-xs font-semibold">${ath.gender}</span></td>
+                            <td class="p-4 text-right font-mono font-bold tracking-wider text-yellow-400 group-hover:text-white transition">${timeStr}</td>
+                        </tr>
+                    `);
+                    rankCounter++;
+                });
+            },
+
+            renderAllResultsTable() {
+                const container = document.getElementById('dashboard-all-results');
+                const filterGender = document.getElementById('filter-gender').value;
+                const filterStyle = document.getElementById('filter-style').value;
+                
+                container.innerHTML = '';
+
+                // Filtering Data
+                let filteredData = State.data.filter(item => {
+                    let matchGender = filterGender === "Semua" || item.gender === filterGender;
+                    let matchStyle = filterStyle === "Semua" || item.style === filterStyle;
+                    return matchGender && matchStyle;
+                });
+
+                if (filteredData.length === 0) {
+                    container.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-gray-400">Belum ada data pencatatan untuk filter ini.</td></tr>`;
+                    return;
+                }
+
+                // Sorting (Style -> Gender -> Time)
+                filteredData.sort((a, b) => {
+                    if (a.style !== b.style) return a.style.localeCompare(b.style);
+                    if (a.gender !== b.gender) return a.gender.localeCompare(b.gender);
+                    return a.total_ms - b.total_ms;
+                });
+
+                let currentGroup = "";
+                let rankCounter = 1;
+
+                filteredData.forEach((ath) => {
+                    const groupKey = `${ath.style}_${ath.gender}`;
+                    if (groupKey !== currentGroup) {
+                        currentGroup = groupKey;
+                        rankCounter = 1;
+                    }
+
+                    const timeStr = `${String(ath.mm).padStart(2, '0')}:${String(ath.ss).padStart(2, '0')}.${String(ath.ms).padStart(2, '0')}`;
+                    let rankClass = rankCounter === 1 ? "text-yellow-400 font-bold" : (rankCounter === 2 ? "text-gray-200 font-bold" : (rankCounter === 3 ? "text-yellow-600 font-bold" : "text-gray-300"));
+                    const genderBadgeClass = ath.gender === 'Putra' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-pink-500/20 text-pink-400 border-pink-500/30';
+
+                    container.insertAdjacentHTML('beforeend', `
+                        <tr class="hover:bg-white/10 transition group">
+                            <td class="p-4 ${rankClass}"># ${rankCounter}</td>
+                            <td class="p-4 font-medium text-white">${ath.name}</td>
+                            <td class="p-4 text-gray-400">${ath.team}</td>
+                            <td class="p-4"><span class="${genderBadgeClass} border px-2 py-1 rounded text-xs font-semibold">${ath.gender}</span></td>
+                            <td class="p-4"><span class="bg-brand-cyan/20 text-brand-cyan border border-brand-cyan/30 px-2 py-1 rounded text-xs font-semibold">${ath.style}</span></td>
+                            <td class="p-4 text-right font-mono font-bold tracking-wider text-gray-200 group-hover:text-brand-cyan transition">${timeStr}</td>
+                        </tr>
+                    `);
+                    rankCounter++;
+                });
+            },
+
+            showLoader(show) { document.getElementById('loader').classList[show ? 'remove' : 'add']('hidden'); },
+            toast(msg, type = 'success') { Swal.fire({ toast: true, position: 'top-end', icon: type, title: msg, showConfirmButton: false, timer: 3000, background: '#1a202c', color: '#fff' }); }
+        };
+
+        window.addEventListener('DOMContentLoaded', () => AppLogic.init());
+    </script>
+</body>
+</html>
